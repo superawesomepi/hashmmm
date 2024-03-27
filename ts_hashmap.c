@@ -12,8 +12,15 @@
  * @return a pointer to a new thread-safe hashmap.
  */
 ts_hashmap_t *initmap(int capacity) {
-  // TODO
-  return NULL;
+  ts_hashmap_t *newmap = (ts_hashmap_t*) malloc(sizeof(ts_hashmap_t));
+  newmap->table = (ts_entry_t**) malloc(capacity * sizeof(ts_entry_t*));
+  pthread_mutex_t *locks = (pthread_mutex_t*) malloc(capacity * sizeof(pthread_mutex_t*));
+  for (int i = 0; i < capacity; i++) {
+    newmap->table[i] = (ts_entry_t*) malloc(sizeof(ts_entry_t));
+    pthread_mutex_init(&locks[i], NULL);
+  }
+  newmap->capacity = capacity;
+  return newmap;
 }
 
 /**
@@ -23,7 +30,13 @@ ts_hashmap_t *initmap(int capacity) {
  * @return the value associated with the given key, or INT_MAX if key not found
  */
 int get(ts_hashmap_t *map, int key) {
-  // TODO
+  map->numOps++;
+  int here = hashCode(map, key);
+  struct ts_entry_t* current = map->table[here];
+  while(current != NULL) {
+    if(current->key == key) return current->value;
+    current = current->next;
+  }
   return INT_MAX;
 }
 
@@ -35,7 +48,28 @@ int get(ts_hashmap_t *map, int key) {
  * @return old associated value, or INT_MAX if the key was new
  */
 int put(ts_hashmap_t *map, int key, int value) {
-  // TODO
+  map->numOps++;
+  int here = hashCode(map, key);
+  // check if key is already present
+  struct ts_entry_t* current = map->table[here];
+  while(current != NULL) {
+    if(current->key == key) {
+      int oldval = current->value;
+      current->value = value;
+      return oldval;
+    }
+    current = current->next;
+  }
+  // otherwise the key wasn't present, so add a new entry
+  struct ts_entry_t* newEntry = (ts_entry_t*) malloc (sizeof(ts_entry_t));
+  if(map->table[here] == NULL) map->table[here] = newEntry;
+  else {
+    newEntry->next = map->table[here];
+    map->table[here] = newEntry;
+  }
+  newEntry->key = key;
+  newEntry->value = value;
+  map->size++;
   return INT_MAX;
 }
 
@@ -46,8 +80,30 @@ int put(ts_hashmap_t *map, int key, int value) {
  * @return the value associated with the given key, or INT_MAX if key not found
  */
 int del(ts_hashmap_t *map, int key) {
-  // TODO
-  return INT_MAX;
+  map->numOps++;
+  int here = hashCode(map, key);
+  struct ts_entry_t* current = map->table[here];
+  if(current == NULL) return INT_MAX; // there was nothing here why are you trying to delete it?
+  struct ts_entry_t* previous = NULL;
+  while(current != NULL) {
+    if(current->key == key) break;
+    previous = current;
+    current = current->next;
+  }
+  
+  // key not found
+  if(current == NULL) return INT_MAX;
+
+  // key found
+  if(previous == NULL) map->table[here] = current->next; // node is head
+  else previous->next = current->next; // node is not head
+  map->size--;
+  return current->value;
+}
+
+int hashCode(ts_hashmap_t *map, int key) {
+  unsigned int unskey = (unsigned int) key;
+  return unskey % map->capacity;
 }
 
 
@@ -77,3 +133,4 @@ void freeMap(ts_hashmap_t *map) {
   // TODO: free the hash table
   // TODO: destroy locks
 }
+

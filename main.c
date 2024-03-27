@@ -38,7 +38,6 @@ int main(int argc, char *argv[]) {
 		printf("Usage: %s <num threads> <hashmap capacity> <max key>\n", argv[0]);
 		return 1;
 	}
-
 	double endTime = 0, startTime = 0;
 	srand(time(NULL));
 	int num_threads = (unsigned int) atoi(argv[1]);
@@ -61,13 +60,13 @@ int main(int argc, char *argv[]) {
 	for (int i = 0; i < num_threads; i++) {
 		pthread_join(threads[i], NULL);
 	}
-
+	
 	// end clocking!
 	endTime = rtclock();
 
 	// clean up memory
 	free(threads);
-
+	
 	// print content and timing results
 	// UNCOMMENT BELOW FOR DEBUGGING
 	// printmap(map);

@@ -23,5 +23,6 @@ ts_hashmap_t *initmap(int);
 int get(ts_hashmap_t*, int);
 int put(ts_hashmap_t*, int, int);
 int del(ts_hashmap_t*, int);
+int hashCode(ts_hashmap_t*, int);
 void printmap(ts_hashmap_t*);
 void freeMap(ts_hashmap_t*);
