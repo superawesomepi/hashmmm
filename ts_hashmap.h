@@ -18,6 +18,9 @@ typedef struct ts_hashmap_t {
    int size;
 } ts_hashmap_t;
 
+// a list of locks for the hashmap
+pthread_mutex_t **locks;
+
 // function declarations
 ts_hashmap_t *initmap(int);
 int get(ts_hashmap_t*, int);

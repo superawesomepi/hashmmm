@@ -14,10 +14,11 @@
 ts_hashmap_t *initmap(int capacity) {
   ts_hashmap_t *newmap = (ts_hashmap_t*) malloc(sizeof(ts_hashmap_t));
   newmap->table = (ts_entry_t**) malloc(capacity * sizeof(ts_entry_t*));
-  pthread_mutex_t *locks = (pthread_mutex_t*) malloc(capacity * sizeof(pthread_mutex_t*));
+  locks = (pthread_mutex_t**) malloc(capacity * sizeof(pthread_mutex_t*));
   for (int i = 0; i < capacity; i++) {
     newmap->table[i] = (ts_entry_t*) malloc(sizeof(ts_entry_t));
-    pthread_mutex_init(&locks[i], NULL);
+    locks[i] = (pthread_mutex_t*) malloc(sizeof(pthread_mutex_t));
+    pthread_mutex_init(locks[i], NULL);
   }
   newmap->capacity = capacity;
   return newmap;
@@ -32,11 +33,13 @@ ts_hashmap_t *initmap(int capacity) {
 int get(ts_hashmap_t *map, int key) {
   map->numOps++;
   int here = hashCode(map, key);
+  pthread_mutex_lock(locks[here]);
   struct ts_entry_t* current = map->table[here];
   while(current != NULL) {
     if(current->key == key) return current->value;
     current = current->next;
   }
+  pthread_mutex_unlock(locks[here]);
   return INT_MAX;
 }
 
