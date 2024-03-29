@@ -160,10 +160,13 @@ void printmap(ts_hashmap_t *map) {
  * @param map a pointer to the map
  */
 void freeMap(ts_hashmap_t *map) {
+   // TODO: destroy locks
+  pthread_spin_destroy(map->sizelock);
+  free(map->sizelock); // valgrind doesn't recognize destroy I guess, or something weird is happening?
+  pthread_spin_destroy(map->opslock);
+  free(map->opslock); // valgrind doesn't recognize destroy
   // TODO: iterate through each list, free up all nodes
-  for(int i = 0; i < map->capacity; i++) {
-    // destroy the lock for each list in here as well
-    pthread_mutex_destroy(map->locks[i]);
+  for (int i = 0; i < map->capacity; i++) {
     struct ts_entry_t* current = map->table[i];
     struct ts_entry_t* temp = NULL;
     while(current != NULL) {
@@ -171,10 +174,12 @@ void freeMap(ts_hashmap_t *map) {
       free(current);
       current = temp;
     }
+    free(map->table[i]);
+    // destroy the lock for each list in here as well
+    pthread_mutex_destroy(map->locks[i]);
   }
-  // TODO: destroy locks
-  pthread_spin_destroy(map->sizelock);
-  pthread_spin_destroy(map->opslock);
+  free(map->table);
+  free(map->locks);
   // TODO: free the hash table
   free(map);
   
