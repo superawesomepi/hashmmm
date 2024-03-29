@@ -161,7 +161,23 @@ void printmap(ts_hashmap_t *map) {
  */
 void freeMap(ts_hashmap_t *map) {
   // TODO: iterate through each list, free up all nodes
-  // TODO: free the hash table
+  for(int i = 0; i < map->capacity; i++) {
+    // destroy the lock for each list in here as well
+    pthread_mutex_destroy(map->locks[i]);
+    struct ts_entry_t* current = map->table[i];
+    struct ts_entry_t* temp = NULL;
+    while(current != NULL) {
+      temp = current->next;
+      free(current);
+      current = temp;
+    }
+  }
   // TODO: destroy locks
+  pthread_spin_destroy(map->sizelock);
+  pthread_spin_destroy(map->opslock);
+  // TODO: free the hash table
+  free(map);
+  
+
 }
 
