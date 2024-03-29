@@ -13,13 +13,14 @@ typedef struct ts_entry_t {
 // and the number of operations that it has run.
 typedef struct ts_hashmap_t {
    ts_entry_t **table;
+   pthread_mutex_t **locks;
+   pthread_spinlock_t *sizelock;
+   pthread_spinlock_t *opslock;
    int numOps;
    int capacity;
    int size;
 } ts_hashmap_t;
 
-// a list of locks for the hashmap
-pthread_mutex_t **locks;
 
 // function declarations
 ts_hashmap_t *initmap(int);

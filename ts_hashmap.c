@@ -12,16 +12,20 @@
  * @return a pointer to a new thread-safe hashmap.
  */
 ts_hashmap_t *initmap(int capacity) {
-  ts_hashmap_t *newmap = (ts_hashmap_t*) malloc(sizeof(ts_hashmap_t));
-  newmap->table = (ts_entry_t**) malloc(capacity * sizeof(ts_entry_t*));
-  locks = (pthread_mutex_t**) malloc(capacity * sizeof(pthread_mutex_t*));
+  ts_hashmap_t *map = (ts_hashmap_t*) malloc(sizeof(ts_hashmap_t));
+  map->table = (ts_entry_t**) malloc(capacity * sizeof(ts_entry_t*));
+  map->locks = (pthread_mutex_t**) malloc(capacity * sizeof(pthread_mutex_t*));
+  map->sizelock = (pthread_spinlock_t*) malloc(sizeof(pthread_spinlock_t));
+  pthread_spin_init(map->sizelock, PTHREAD_PROCESS_PRIVATE);
+  map->opslock = (pthread_spinlock_t*) malloc(sizeof(pthread_spinlock_t));
+  pthread_spin_init(map->opslock, PTHREAD_PROCESS_PRIVATE);
   for (int i = 0; i < capacity; i++) {
-    newmap->table[i] = (ts_entry_t*) malloc(sizeof(ts_entry_t));
-    locks[i] = (pthread_mutex_t*) malloc(sizeof(pthread_mutex_t));
-    pthread_mutex_init(locks[i], NULL);
+    map->table[i] = (ts_entry_t*) malloc(sizeof(ts_entry_t));
+    map->locks[i] = (pthread_mutex_t*) malloc(sizeof(pthread_mutex_t));
+    pthread_mutex_init(map->locks[i], NULL);
   }
-  newmap->capacity = capacity;
-  return newmap;
+  map->capacity = capacity;
+  return map;
 }
 
 /**
@@ -31,15 +35,20 @@ ts_hashmap_t *initmap(int capacity) {
  * @return the value associated with the given key, or INT_MAX if key not found
  */
 int get(ts_hashmap_t *map, int key) {
+  pthread_spin_lock(map->opslock);
   map->numOps++;
+  pthread_spin_unlock(map->opslock);
   int here = hashCode(map, key);
-  pthread_mutex_lock(locks[here]);
+  pthread_mutex_lock(map->locks[here]);
   struct ts_entry_t* current = map->table[here];
   while(current != NULL) {
-    if(current->key == key) return current->value;
+    if(current->key == key) {
+      pthread_mutex_unlock(map->locks[here]);
+      return current->value;
+    }
     current = current->next;
   }
-  pthread_mutex_unlock(locks[here]);
+  pthread_mutex_unlock(map->locks[here]);
   return INT_MAX;
 }
 
@@ -51,14 +60,18 @@ int get(ts_hashmap_t *map, int key) {
  * @return old associated value, or INT_MAX if the key was new
  */
 int put(ts_hashmap_t *map, int key, int value) {
+  pthread_spin_lock(map->opslock);
   map->numOps++;
+  pthread_spin_unlock(map->opslock);
   int here = hashCode(map, key);
   // check if key is already present
+  pthread_mutex_lock(map->locks[here]);
   struct ts_entry_t* current = map->table[here];
   while(current != NULL) {
     if(current->key == key) {
       int oldval = current->value;
       current->value = value;
+      pthread_mutex_unlock(map->locks[here]);
       return oldval;
     }
     current = current->next;
@@ -72,7 +85,10 @@ int put(ts_hashmap_t *map, int key, int value) {
   }
   newEntry->key = key;
   newEntry->value = value;
+  pthread_mutex_unlock(map->locks[here]);
+  pthread_spin_lock(map->sizelock);
   map->size++;
+  pthread_spin_unlock(map->sizelock);
   return INT_MAX;
 }
 
@@ -83,10 +99,16 @@ int put(ts_hashmap_t *map, int key, int value) {
  * @return the value associated with the given key, or INT_MAX if key not found
  */
 int del(ts_hashmap_t *map, int key) {
+  pthread_spin_lock(map->opslock);
   map->numOps++;
+  pthread_spin_unlock(map->opslock);
   int here = hashCode(map, key);
+  pthread_mutex_lock(map->locks[here]);
   struct ts_entry_t* current = map->table[here];
-  if(current == NULL) return INT_MAX; // there was nothing here why are you trying to delete it?
+  if(current == NULL) {
+    pthread_mutex_unlock(map->locks[here]);
+    return INT_MAX; // there was nothing here why are you trying to delete it?
+  }
   struct ts_entry_t* previous = NULL;
   while(current != NULL) {
     if(current->key == key) break;
@@ -95,12 +117,18 @@ int del(ts_hashmap_t *map, int key) {
   }
   
   // key not found
-  if(current == NULL) return INT_MAX;
+  if(current == NULL) {
+    pthread_mutex_unlock(map->locks[here]);
+    return INT_MAX;
+  }
 
   // key found
   if(previous == NULL) map->table[here] = current->next; // node is head
   else previous->next = current->next; // node is not head
+  pthread_mutex_unlock(map->locks[here]);
+  pthread_spin_lock(map->sizelock);
   map->size--;
+  pthread_spin_unlock(map->sizelock);
   return current->value;
 }
 
